@@ -1,0 +1,259 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Garage Guardian - AWS CloudFormation Stack
+
+Parameters:
+  TuyaAPIKey:
+    Type: String
+    Description: The Tuya API Key
+  TuyaAPISecret:
+    Type: String
+    Description: The Tuya API Secret
+    NoEcho: true # Hides the API secret from logs and output
+  TuyaDeviceID:
+    Type: String
+    Description: The Tuya Device ID to monitor
+
+Resources:
+  GarageGuardianSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: GarageGuardianCredentials
+      Description: Tuya API credentials for Garage Guardian
+      SecretString: !Sub |
+        {
+          "apiKey": "${TuyaAPIKey}",
+          "apiSecret": "${TuyaAPISecret}",
+          "deviceId": "${TuyaDeviceID}"
+        }
+
+  GarageGuardianDynamoDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: GarageGuardianStatus
+      AttributeDefinitions:
+        - AttributeName: DeviceID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: DeviceID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  GarageGuardianApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: GarageGuardianAPI
+
+  GarageGuardianApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt GarageGuardianApiGateway.RootResourceId
+      PathPart: status
+      RestApiId: !Ref GarageGuardianApiGateway
+
+  GarageGuardianApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ResourceId: !Ref GarageGuardianApiGatewayResource
+      RestApiId: !Ref GarageGuardianApiGateway
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GarageGuardianApiGatewayLambda.Arn}/invocations"
+
+  GarageGuardianApiGatewayLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: GarageGuardianApiGatewayHandler
+      Runtime: python3.13
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt GarageGuardianApiGatewayLambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+
+          def lambda_handler(event, context):
+              dynamodb = boto3.resource('dynamodb')
+              table = dynamodb.Table('GarageGuardianStatus')
+
+              device_id = event.get('queryStringParameters', {}).get('deviceId', 'unknown')
+
+              response = table.get_item(Key={'DeviceID': device_id})
+              status = response.get('Item', {}).get('Status', 'Unknown')
+
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json'},
+                  'body': json.dumps({'deviceId': device_id, 'status': status})
+              }
+
+  GarageGuardianApiGatewayLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GarageGuardianApiGatewayLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GarageGuardianApiGateway}/*/GET/status"
+
+  GarageGuardianApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: GarageGuardianApiGatewayMethod
+    Properties:
+      RestApiId: !Ref GarageGuardianApiGateway
+      StageName: prod
+
+  GarageGuardianLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: GarageGuardianQuery
+      Runtime: python3.13
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt GarageGuardianLambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import requests
+          import time
+
+          def lambda_handler(event, context):
+              secrets_client = boto3.client('secretsmanager')
+              secret_name = "GarageGuardianCredentials"
+              secret = secrets_client.get_secret_value(SecretId=secret_name)
+              credentials = json.loads(secret['SecretString'])
+
+              api_key = credentials['apiKey']
+              api_secret = credentials['apiSecret']
+              device_id = credentials['deviceId']
+
+              timestamp = int(time.time())
+
+              # Replace with the actual Tuya API URL for querying device state
+              api_url = f"https://openapi.tuya.com/v1.0/devices/{device_id}/status"
+              headers = {
+                  "client_id": api_key,
+                  "sign": api_secret,
+                  "t": str(timestamp),
+              }
+
+              response = requests.get(api_url, headers=headers)
+              status = response.json()
+
+              dynamodb = boto3.resource('dynamodb')
+              table = dynamodb.Table('GarageGuardianStatus')
+
+              table.put_item(
+                  Item={
+                      'DeviceID': device_id,
+                      'Status': status,
+                  }
+              )
+
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('State Updated!')
+              }
+
+  GarageGuardianEventBridgeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(5 minutes)
+      Targets:
+        - Arn: !GetAtt GarageGuardianLambda.Arn
+          Id: GarageGuardianLambdaTarget
+
+  GarageGuardianLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GarageGuardianLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt GarageGuardianEventBridgeRule.Arn
+
+  GarageGuardianHTMLLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: GarageGuardianHTMLHandler
+      Runtime: python3.13
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt GarageGuardianApiGatewayLambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              html_content = """
+              <!DOCTYPE html>
+              <html lang="en">
+              <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Garage Guardian</title>
+                  <style>
+                      body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
+                      header { background: #333; color: white; padding: 10px 0; }
+                      .status { margin-top: 20px; }
+                  </style>
+              </head>
+              <body>
+                  <header>
+                      <h1>Garage Guardian</h1>
+                  </header>
+                  <div class="status">
+                      <img id="garage-status" src="" alt="Garage Status" />
+                  </div>
+                  <script>
+                      async function checkGarageStatus() {
+                          const response = await fetch('<API_GATEWAY_STATUS_URL>');
+                          const data = await response.json();
+                          const statusImg = document.getElementById('garage-status');
+                          statusImg.src = data.status === "on" ? "open.svg" : "closed.svg";
+                      }
+                      checkGarageStatus();
+                      setInterval(checkGarageStatus, 5000);
+                  </script>
+              </body>
+              </html>
+              """
+              html_content = html_content.replace("<API_GATEWAY_STATUS_URL>", "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/status")
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'text/html'},
+                  'body': html_content
+              }
+
+  GarageGuardianApiGatewayHTMLResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt GarageGuardianApiGateway.RootResourceId
+      PathPart: ''
+      RestApiId: !Ref GarageGuardianApiGateway
+
+  GarageGuardianApiGatewayHTMLMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ResourceId: !Ref GarageGuardianApiGatewayHTMLResource
+      RestApiId: !Ref GarageGuardianApiGateway
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GarageGuardianHTMLLambda.Arn}/invocations"
+
+  GarageGuardianHTMLLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GarageGuardianHTMLLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GarageGuardianApiGateway}/*/GET/"
+
+Outputs:
+  ApiGatewayUrl:
+    Description: API Gateway URL to check garage door status
+    Value: !Sub "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/status"
+
+  GarageGuardianSiteUrl:
+    Description: URL for the Garage Guardian site
+    Value: !Sub "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/"
