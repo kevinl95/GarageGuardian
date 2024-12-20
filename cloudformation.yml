@@ -14,10 +14,10 @@ Parameters:
     Description: The Tuya Device ID to monitor
 
 Resources:
-  GarageGuardianApiGatewayLambdaExecutionRole:
+  GarageGuardianLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: GarageGuardianApiGatewayLambdaExecutionRole
+      RoleName: GarageGuardianLambdaExecutionRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -108,7 +108,7 @@ Resources:
       FunctionName: GarageGuardianApiGatewayHandler
       Runtime: python3.13
       Handler: lambda_function.lambda_handler
-      Role: !GetAtt GarageGuardianApiGatewayLambdaExecutionRole.Arn
+      Role: !GetAtt GarageGuardianLambdaExecutionRole.Arn
       Code:
         ZipFile: |
           import json
@@ -216,7 +216,7 @@ Resources:
       FunctionName: GarageGuardianHTMLHandler
       Runtime: python3.13
       Handler: lambda_function.lambda_handler
-      Role: !GetAtt GarageGuardianApiGatewayLambdaExecutionRole.Arn
+      Role: !GetAtt GarageGuardianLambdaExecutionRole.Arn
       Code:
         ZipFile: |
           import json
