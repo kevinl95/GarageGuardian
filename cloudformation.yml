@@ -234,12 +234,12 @@ Resources:
                       theme_color: "#333333",
                       icons: [
                           {
-                              src: "pwa-192x192.png",
+                              src: "https://raw.githubusercontent.com/kevinl95/GarageGuardian/refs/heads/master/assets/pwa-192x192.png",
                               sizes: "192x192",
                               type: "image/png"
                           },
                           {
-                              src: "pwa-512x512.png",
+                              src: "https://raw.githubusercontent.com/kevinl95/GarageGuardian/refs/heads/master/assets/pwa-512x512.png",
                               sizes: "512x512",
                               type: "image/png"
                           }
@@ -275,26 +275,26 @@ Resources:
                       setInterval(checkGarageStatus, 5000);
 
                       if ('serviceWorker' in navigator) {
-                          window.addEventListener('load', () => {
-                              navigator.serviceWorker.register('data:application/javascript,${encodeURIComponent(`
-                                  self.addEventListener('install', (event) => {
-                                      console.log('Service worker installed');
-                                  });
+                        window.addEventListener('load', () => {
+                            navigator.serviceWorker.register(`data:application/javascript,${encodeURIComponent(`
+                                self.addEventListener('install', (event) => {
+                                    console.log('Service worker installed');
+                                });
 
-                                  self.addEventListener('fetch', (event) => {
-                                      event.respondWith(
-                                          caches.match(event.request).then((response) => {
-                                              return response || fetch(event.request);
-                                          })
-                                      );
-                                  });
-                              `)}').then((registration) => {
-                                  console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                              }, (error) => {
-                                  console.log('ServiceWorker registration failed: ', error);
-                              });
-                          });
-                      }
+                                self.addEventListener('fetch', (event) => {
+                                    event.respondWith(
+                                        caches.match(event.request).then((response) => {
+                                            return response || fetch(event.request);
+                                        })
+                                    );
+                                });
+                            `)}`).then((registration) => {
+                                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                            }, (error) => {
+                                console.log('ServiceWorker registration failed: ', error);
+                            });
+                        });
+                    }
                   </script>
               </body>
               </html>
