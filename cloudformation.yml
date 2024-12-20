@@ -14,6 +14,46 @@ Parameters:
     Description: The Tuya Device ID to monitor
 
 Resources:
+  GarageGuardianApiGatewayLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GarageGuardianApiGatewayLambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GarageGuardianLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource: arn:aws:dynamodb:*:*:table/GarageGuardianStatus
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: arn:aws:secretsmanager:*:*:secret:GarageGuardianCredentials-*
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: arn:aws:lambda:*:*:function:GarageGuardianApiGatewayLambda
+
   GarageGuardianSecrets:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -179,8 +219,15 @@ Resources:
       Role: !GetAtt GarageGuardianApiGatewayLambdaExecutionRole.Arn
       Code:
         ZipFile: |
-          def lambda_handler(event, context):
-              html_content = """
+          import json
+          import boto3
+          import os
+
+          def handler(event, context):
+              region = boto3.session.Session().region_name
+              api_gateway_url = f"https://{os.environ['API_GATEWAY_ID']}.execute-api.{region}.amazonaws.com/prod/status"
+
+              html_content = f"""
               <!DOCTYPE html>
               <html lang="en">
               <head>
@@ -188,63 +235,63 @@ Resources:
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
                   <title>Garage Guardian</title>
                   <style>
-                      body {
+                      body {{
                           font-family: Arial, sans-serif;
                           text-align: center;
                           margin: 0;
                           padding: 0;
                           background-color: #f4f4f4;
-                      }
-                      header {
+                      }}
+                      header {{
                           background: #333;
                           color: white;
                           padding: 20px 0;
-                      }
-                      .status {
+                      }}
+                      .status {{
                           margin-top: 50px;
                           padding: 20px;
                           background: white;
                           border-radius: 10px;
                           box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
                           display: inline-block;
-                      }
-                      .status h2 {
+                      }}
+                      .status h2 {{
                           margin: 0;
                           font-size: 24px;
                           color: #333;
-                      }
-                      .status p {
+                      }}
+                      .status p {{
                           font-size: 18px;
                           color: #666;
-                      }
-                      .status.open {
+                      }}
+                      .status.open {{
                           color: green;
-                      }
-                      .status.closed {
+                      }}
+                      .status.closed {{
                           color: red;
-                      }
+                      }}
                   </style>
-                  <link rel="manifest" href="data:application/manifest+json,${encodeURIComponent(JSON.stringify({
-                      name: "Garage Guardian",
-                      short_name: "GarageGuardian",
-                      description: "Check if your garage door is open from anywhere using a smart lightbulb!",
-                      start_url: "/",
-                      display: "standalone",
-                      background_color: "#ffffff",
-                      theme_color: "#333333",
-                      icons: [
+                  <link rel="manifest" href="data:application/manifest+json,{json.dumps({
+                      "name": "Garage Guardian",
+                      "short_name": "GarageGuardian",
+                      "description": "Check if your garage door is open from anywhere using a smart lightbulb!",
+                      "start_url": "/",
+                      "display": "standalone",
+                      "background_color": "#ffffff",
+                      "theme_color": "#333333",
+                      "icons": [
                           {
-                              src: "https://raw.githubusercontent.com/kevinl95/GarageGuardian/refs/heads/master/assets/pwa-192x192.png",
-                              sizes: "192x192",
-                              type: "image/png"
+                              "src": "pwa-192x192.png",
+                              "sizes": "192x192",
+                              "type": "image/png"
                           },
                           {
-                              src: "https://raw.githubusercontent.com/kevinl95/GarageGuardian/refs/heads/master/assets/pwa-512x512.png",
-                              sizes: "512x512",
-                              type: "image/png"
+                              "src": "pwa-512x512.png",
+                              "sizes": "512x512",
+                              "type": "image/png"
                           }
                       ]
-                  }))}">
+                  })}">
               </head>
               <body>
                   <header>
@@ -255,51 +302,50 @@ Resources:
                       <p id="status-text">Checking status...</p>
                   </div>
                   <script>
-                      async function checkGarageStatus() {
-                          const response = await fetch('<API_GATEWAY_STATUS_URL>');
+                      async function checkGarageStatus() {{
+                          const response = await fetch('{api_gateway_url}');
                           const data = await response.json();
                           const statusText = document.getElementById('status-text');
                           const statusDiv = document.getElementById('garage-status');
 
-                          if (data.status === "on") {
+                          if (data.status === "on") {{
                               statusText.textContent = "The garage door is open.";
                               statusDiv.classList.remove('closed');
                               statusDiv.classList.add('open');
-                          } else {
+                          }} else {{
                               statusText.textContent = "The garage door is closed.";
                               statusDiv.classList.remove('open');
                               statusDiv.classList.add('closed');
-                          }
-                      }
+                          }}
+                      }}
                       checkGarageStatus();
                       setInterval(checkGarageStatus, 5000);
 
-                      if ('serviceWorker' in navigator) {
-                        window.addEventListener('load', () => {
-                            navigator.serviceWorker.register(`data:application/javascript,${encodeURIComponent(`
-                                self.addEventListener('install', (event) => {
-                                    console.log('Service worker installed');
-                                });
+                      if ('serviceWorker' in navigator) {{
+                          window.addEventListener('load', () => {{
+                              navigator.serviceWorker.register(`data:application/javascript,${{encodeURIComponent(`
+                                  self.addEventListener('install', (event) => {{
+                                      console.log('Service worker installed');
+                                  }});
 
-                                self.addEventListener('fetch', (event) => {
-                                    event.respondWith(
-                                        caches.match(event.request).then((response) => {
-                                            return response || fetch(event.request);
-                                        })
-                                    );
-                                });
-                            `)}`).then((registration) => {
-                                console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                            }, (error) => {
-                                console.log('ServiceWorker registration failed: ', error);
-                            });
-                        });
-                    }
+                                  self.addEventListener('fetch', (event) => {{
+                                      event.respondWith(
+                                          caches.match(event.request).then((response) => {{
+                                              return response || fetch(event.request);
+                                          }})
+                                      );
+                                  }});
+                              `)}}`).then((registration) => {{
+                                  console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                              }}, (error) => {{
+                                  console.log('ServiceWorker registration failed: ', error);
+                              }});
+                          }});
+                      }}
                   </script>
               </body>
               </html>
               """
-              html_content = html_content.replace("<API_GATEWAY_STATUS_URL>", "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/status")
               return {
                   'statusCode': 200,
                   'headers': {'Content-Type': 'text/html'},
