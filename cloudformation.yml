@@ -117,6 +117,8 @@ Resources:
           import boto3
           import requests
           import time
+          import hashlib
+          import hmac
 
           def lambda_handler(event, context):
               secrets_client = boto3.client('secretsmanager')
@@ -128,32 +130,28 @@ Resources:
               api_secret = credentials['apiSecret']
               device_id = credentials['deviceId']
 
-              timestamp = int(time.time())
+              timestamp = str(int(time.time() * 1000))  # Tuya API requires timestamp in milliseconds
 
-              # Replace with the actual Tuya API URL for querying device state
-              api_url = f"https://openapi.tuya.com/v1.0/devices/{device_id}/status"
+              # Generate the sign
+              sign_str = f"{api_key}{timestamp}"
+              sign = hmac.new(api_secret.encode('utf-8'), sign_str.encode('utf-8'), hashlib.sha256).hexdigest().upper()
+
+              # Tuya API URL for querying device state
+              api_url = f"https://openapi.tuyaus.com/v1.0/devices/{device_id}/status"
               headers = {
                   "client_id": api_key,
-                  "sign": api_secret,
-                  "t": str(timestamp),
+                  "sign": sign,
+                  "t": timestamp,
+                  "sign_method": "HMAC-SHA256",
+                  "Content-Type": "application/json"
               }
 
               response = requests.get(api_url, headers=headers)
               status = response.json()
 
-              dynamodb = boto3.resource('dynamodb')
-              table = dynamodb.Table('GarageGuardianStatus')
-
-              table.put_item(
-                  Item={
-                      'DeviceID': device_id,
-                      'Status': status,
-                  }
-              )
-
               return {
-                  'statusCode': 200,
-                  'body': json.dumps('State Updated!')
+                  'statusCode': response.status_code,
+                  'body': json.dumps(status)
               }
 
   GarageGuardianEventBridgeRule:
@@ -190,27 +188,113 @@ Resources:
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
                   <title>Garage Guardian</title>
                   <style>
-                      body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
-                      header { background: #333; color: white; padding: 10px 0; }
-                      .status { margin-top: 20px; }
+                      body {
+                          font-family: Arial, sans-serif;
+                          text-align: center;
+                          margin: 0;
+                          padding: 0;
+                          background-color: #f4f4f4;
+                      }
+                      header {
+                          background: #333;
+                          color: white;
+                          padding: 20px 0;
+                      }
+                      .status {
+                          margin-top: 50px;
+                          padding: 20px;
+                          background: white;
+                          border-radius: 10px;
+                          box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                          display: inline-block;
+                      }
+                      .status h2 {
+                          margin: 0;
+                          font-size: 24px;
+                          color: #333;
+                      }
+                      .status p {
+                          font-size: 18px;
+                          color: #666;
+                      }
+                      .status.open {
+                          color: green;
+                      }
+                      .status.closed {
+                          color: red;
+                      }
                   </style>
+                  <link rel="manifest" href="data:application/manifest+json,${encodeURIComponent(JSON.stringify({
+                      name: "Garage Guardian",
+                      short_name: "GarageGuardian",
+                      description: "Check if your garage door is open from anywhere using a smart lightbulb!",
+                      start_url: "/",
+                      display: "standalone",
+                      background_color: "#ffffff",
+                      theme_color: "#333333",
+                      icons: [
+                          {
+                              src: "pwa-192x192.png",
+                              sizes: "192x192",
+                              type: "image/png"
+                          },
+                          {
+                              src: "pwa-512x512.png",
+                              sizes: "512x512",
+                              type: "image/png"
+                          }
+                      ]
+                  }))}">
               </head>
               <body>
                   <header>
                       <h1>Garage Guardian</h1>
                   </header>
-                  <div class="status">
-                      <img id="garage-status" src="" alt="Garage Status" />
+                  <div class="status" id="garage-status">
+                      <h2>Garage Door Status</h2>
+                      <p id="status-text">Checking status...</p>
                   </div>
                   <script>
                       async function checkGarageStatus() {
                           const response = await fetch('<API_GATEWAY_STATUS_URL>');
                           const data = await response.json();
-                          const statusImg = document.getElementById('garage-status');
-                          statusImg.src = data.status === "on" ? "open.svg" : "closed.svg";
+                          const statusText = document.getElementById('status-text');
+                          const statusDiv = document.getElementById('garage-status');
+
+                          if (data.status === "on") {
+                              statusText.textContent = "The garage door is open.";
+                              statusDiv.classList.remove('closed');
+                              statusDiv.classList.add('open');
+                          } else {
+                              statusText.textContent = "The garage door is closed.";
+                              statusDiv.classList.remove('open');
+                              statusDiv.classList.add('closed');
+                          }
                       }
                       checkGarageStatus();
                       setInterval(checkGarageStatus, 5000);
+
+                      if ('serviceWorker' in navigator) {
+                          window.addEventListener('load', () => {
+                              navigator.serviceWorker.register('data:application/javascript,${encodeURIComponent(`
+                                  self.addEventListener('install', (event) => {
+                                      console.log('Service worker installed');
+                                  });
+
+                                  self.addEventListener('fetch', (event) => {
+                                      event.respondWith(
+                                          caches.match(event.request).then((response) => {
+                                              return response || fetch(event.request);
+                                          })
+                                      );
+                                  });
+                              `)}').then((registration) => {
+                                  console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                              }, (error) => {
+                                  console.log('ServiceWorker registration failed: ', error);
+                              });
+                          });
+                      }
                   </script>
               </body>
               </html>
