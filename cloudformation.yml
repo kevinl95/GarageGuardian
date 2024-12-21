@@ -458,7 +458,7 @@ Resources:
     Type: AWS::ApiGateway::Resource
     Properties:
       ParentId: !GetAtt GarageGuardianApiGateway.RootResourceId
-      PathPart: ''
+      PathPart: html
       RestApiId: !Ref GarageGuardianApiGateway
 
   GarageGuardianApiGatewayHTMLMethod:
@@ -488,4 +488,4 @@ Outputs:
 
   GarageGuardianSiteUrl:
     Description: URL for the Garage Guardian site
-    Value: !Sub "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+    Value: !Sub "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/html"
