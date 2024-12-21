@@ -119,7 +119,8 @@ Resources:
     Properties:
       FunctionName: GarageGuardianApiGatewayHandler
       Runtime: python3.13
-      Handler: lambda_function.lambda_handler
+      Handler: index.lambda_handler
+      Timeout: 30
       Role: !GetAtt GarageGuardianLambdaExecutionRole.Arn
       Code:
         ZipFile: |
@@ -174,13 +175,14 @@ Resources:
     Properties:
       FunctionName: GarageGuardianQuery
       Runtime: python3.13
-      Handler: lambda_function.lambda_handler
+      Handler: index.lambda_handler
+      Timeout: 30
       Role: !GetAtt GarageGuardianLambdaExecutionRole.Arn
       Code:
         ZipFile: |
           import json
           import boto3
-          import requests
+          import urllib3
           import time
           import datetime
           import hashlib
@@ -229,8 +231,9 @@ Resources:
                   "sign_method": "HMAC-SHA256",
               }
 
-              token_response = requests.get(base_url + token_path, headers=token_headers)
-              token_data = token_response.json()
+              http = urllib3.PoolManager()
+              token_response = http.request("GET", base_url + token_path, headers=token_headers)
+              token_data = json.loads(token_response.data.decode('utf-8'))
 
               if not token_data.get("success"):
                   raise Exception(f"Failed to generate token: {token_data.get('msg')}")
@@ -260,9 +263,8 @@ Resources:
               }
 
               # Make the API request
-              response = requests.get(f"{base_url}{device_info_path}", headers=headers)
-              response_data = response.json()
-              print(response_data)
+              response = http.request("GET", f"{base_url}{device_info_path}", headers=headers)
+              response_data = json.loads(response.data.decode('utf-8'))
               if not response_data.get("success"):
                   raise Exception(f"API call failed: {response_data.get('msg')}")
 
@@ -317,15 +319,19 @@ Resources:
     Properties:
       FunctionName: GarageGuardianHTMLHandler
       Runtime: python3.13
-      Handler: lambda_function.lambda_handler
+      Handler: index.lambda_handler
       Role: !GetAtt GarageGuardianLambdaExecutionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          API_GATEWAY_ID: !GetAtt GarageGuardianApiGateway.RootResourceId
       Code:
         ZipFile: |
           import json
           import boto3
           import os
 
-          def handler(event, context):
+          def lambda_handler(event, context):
               region = boto3.session.Session().region_name
               api_gateway_url = f"https://{os.environ['API_GATEWAY_ID']}.execute-api.{region}.amazonaws.com/prod/status"
 
