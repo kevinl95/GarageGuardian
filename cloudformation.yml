@@ -12,6 +12,17 @@ Parameters:
   TuyaDeviceID:
     Type: String
     Description: The Tuya Device ID to monitor
+  TuyaDataCenter:
+    Type: String
+    Description: The Tuya Data Center
+    AllowedValues:
+      - China
+      - WesternAmerica
+      - EasternAmerica
+      - CentralEurope
+      - WesternEurope
+      - India
+    Default: WesternAmerica
 
 Resources:
   GarageGuardianLambdaExecutionRole:
@@ -63,7 +74,8 @@ Resources:
         {
           "apiKey": "${TuyaAPIKey}",
           "apiSecret": "${TuyaAPISecret}",
-          "deviceId": "${TuyaDeviceID}"
+          "deviceId": "${TuyaDeviceID}",
+          "dataCenter": "${TuyaDataCenter}"
         }
 
   GarageGuardianDynamoDB:
@@ -118,10 +130,23 @@ Resources:
               dynamodb = boto3.resource('dynamodb')
               table = dynamodb.Table('GarageGuardianStatus')
 
-              device_id = event.get('queryStringParameters', {}).get('deviceId', 'unknown')
+              # Retrieve the device ID from Secrets Manager
+              secrets_client = boto3.client('secretsmanager')
+              secret_name = "GarageGuardianCredentials"
+              secret = secrets_client.get_secret_value(SecretId=secret_name)
+              credentials = json.loads(secret['SecretString'])
+              device_id = credentials['deviceId']
 
-              response = table.get_item(Key={'DeviceID': device_id})
-              status = response.get('Item', {}).get('Status', 'Unknown')
+              try:
+                  response = table.get_item(Key={'DeviceID': device_id})
+                  status = response.get('Item', {}).get('LastKnownState', 'Unknown')
+              except Exception as e:
+                  print(f"Error querying DynamoDB: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Internal server error'})
+                  }
 
               return {
                   'statusCode': 200,
@@ -157,8 +182,18 @@ Resources:
           import boto3
           import requests
           import time
+          import datetime
           import hashlib
           import hmac
+
+          DATA_CENTER_URLS = {
+              "China": "https://openapi.tuyacn.com",
+              "WesternAmerica": "https://openapi.tuyaus.com",
+              "EasternAmerica": "https://openapi-ueaz.tuyaus.com",
+              "CentralEurope": "https://openapi.tuyaeu.com",
+              "WesternEurope": "https://openapi-weaz.tuyaeu.com",
+              "India": "https://openapi.tuyain.com"
+          }
 
           def lambda_handler(event, context):
               secrets_client = boto3.client('secretsmanager')
@@ -169,30 +204,97 @@ Resources:
               api_key = credentials['apiKey']
               api_secret = credentials['apiSecret']
               device_id = credentials['deviceId']
+              data_center = credentials['dataCenter']
 
-              timestamp = str(int(time.time() * 1000))  # Tuya API requires timestamp in milliseconds
+              base_url = f"{DATA_CENTER_URLS[data_center]}"
 
-              # Generate the sign
-              sign_str = f"{api_key}{timestamp}"
-              sign = hmac.new(api_secret.encode('utf-8'), sign_str.encode('utf-8'), hashlib.sha256).hexdigest().upper()
+              # Step 1: Generate Token
+              token_path = "/v1.0/token?grant_type=1"
+              timestamp = str(int(time.time() * 1000))
+              nonce = ""  # Optional, leave empty if not used
+              method = "GET"
+              content_sha256 = hashlib.sha256("".encode("utf-8")).hexdigest()
+              # Construct the StringToSign
+              string_to_sign = f"{method}\n{content_sha256}\n{nonce}\n{token_path}"
+              sign = hmac.new(
+                  api_secret.encode("utf-8"),
+                  f"{api_key}{timestamp}{string_to_sign}".encode("utf-8"),
+                  hashlib.sha256
+              ).hexdigest().upper()
 
-              # Tuya API URL for querying device state
-              api_url = f"https://openapi.tuyaus.com/v1.0/devices/{device_id}/status"
-              headers = {
+              token_headers = {
                   "client_id": api_key,
                   "sign": sign,
                   "t": timestamp,
                   "sign_method": "HMAC-SHA256",
-                  "Content-Type": "application/json"
               }
 
-              response = requests.get(api_url, headers=headers)
-              status = response.json()
+              token_response = requests.get(base_url + token_path, headers=token_headers)
+              token_data = token_response.json()
+
+              if not token_data.get("success"):
+                  raise Exception(f"Failed to generate token: {token_data.get('msg')}")
+
+              access_token = token_data["result"]["access_token"]
+
+              # Step 2: Query Device Status
+              device_info_path = f"/v1.0/iot-03/devices/{device_id}"
+              # Construct the StringToSign
+              string_to_sign = f"{method}\n{content_sha256}\n{nonce}\n{device_info_path}"
+
+              # Sign the StringToSign with the API secret
+              sign = hmac.new(
+                  api_secret.encode("utf-8"),
+                  f"{api_key}{access_token}{timestamp}{string_to_sign}".encode("utf-8"),
+                  hashlib.sha256
+              ).hexdigest().upper()
+
+              # Prepare the headers
+              headers = {
+                  "client_id": api_key,
+                  "access_token": access_token,
+                  "sign": sign,
+                  "t": timestamp,
+                  "sign_method": "HMAC-SHA256",
+                  "Content-SHA256": content_sha256
+              }
+
+              # Make the API request
+              response = requests.get(f"{base_url}{device_info_path}", headers=headers)
+              response_data = response.json()
+              print(response_data)
+              if not response_data.get("success"):
+                  raise Exception(f"API call failed: {response_data.get('msg')}")
+
+              # Check the online status of the device
+              is_online = response_data["result"]["online"]
+
+              dynamodb = boto3.resource('dynamodb')
+              table = dynamodb.Table('GarageGuardianStatus')
+
+              # Fetch the current state
+              current_state = table.get_item(Key={'DeviceID': device_id}).get('Item', {}).get('LastKnownState', 'closed')
+
+              # Update the state based on the bulb status
+              if status == 'online':
+                  new_state = 'open' if current_state == 'closed' else 'closed'
+              else:
+                  new_state = current_state  # No state change when bulb is offline
+
+              # Save the updated state
+              table.put_item(
+                  Item={
+                      'DeviceID': device_id,
+                      'LastKnownState': new_state,
+                      'LastUpdated': datetime.utcnow().isoformat()
+                  }
+              )
 
               return {
-                  'statusCode': response.status_code,
-                  'body': json.dumps(status)
+                  'statusCode': 200,
+                  'body': json.dumps({'deviceId': device_id, 'garageState': new_state})
               }
+
 
   GarageGuardianEventBridgeRule:
     Type: AWS::Events::Rule
@@ -308,7 +410,7 @@ Resources:
                           const statusText = document.getElementById('status-text');
                           const statusDiv = document.getElementById('garage-status');
 
-                          if (data.status === "on") {{
+                          if (data.status === "open") {{
                               statusText.textContent = "The garage door is open.";
                               statusDiv.classList.remove('closed');
                               statusDiv.classList.add('open');
