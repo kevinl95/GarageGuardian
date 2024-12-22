@@ -7,7 +7,7 @@
 
 How many hackers does it take to screw in a lightbulb?
 
-Garage Guardian is a cloud-based solution to monitor the state of your garage door using a Tuya-enabled smart bulb. You replace the bulb that's likely already in your garage opener with a WiFi smart bulb, and then it keeps track of its on/off state to tell you when your garage door is open or closed - no hardware hacking or modification required. Recall how that bulb turns on and off as the opener is used- this lets us keep track of open and close events. If you're like me and reguarly drive around the block to double check it's closed, rejoice! This project uses AWS services like Lambda, DynamoDB, API Gateway, and Secrets Manager to provide real-time garage door status updates to a simple website you can bookmark on your phone.
+Garage Guardian is a cloud-based solution to monitor the state of your garage door using a Tuya-enabled smart bulb. You replace the bulb that's likely already in your garage opener with a WiFi smart bulb, and then it keeps track of its on/off state to tell you when your garage door is open or closed - no hardware hacking or modification required. Recall how that bulb turns on and off as the opener is used- this lets us keep track of open and close events. If you're like me and reguarly drive around the block to double check it's closed, rejoice! This project uses AWS services like Lambda, DynamoDB, API Gateway, and Secrets Manager to provide real-time garage door status updates to a simple website you can bookmark on your phone. These services are deployed with a single click with no coding knowledge required, simply follow the steps below!
 
 ## Features
 - Keeps track if your garage door is open or closed by getting the status of your smart bulb installed in the opener once every minute. Close/open events can then be tracked in its built-in database to ensure that you have accurate statusing on your garage door!
@@ -22,7 +22,7 @@ Garage Guardian is a cloud-based solution to monitor the state of your garage do
 ## Setup Instructions
 
 ### 1. Install your lightbulb
-1. Install the Tuya Smart app and sign up for an account [iOS](https://apps.apple.com/us/app/tuya-smart/id1034649547), [Android](https://play.google.com/store/apps/details?id=com.tuya.smart&hl=en-US)
+1. Install the Tuya Smart app and sign up for an account: [iOS](https://apps.apple.com/us/app/tuya-smart/id1034649547), [Android](https://play.google.com/store/apps/details?id=com.tuya.smart&hl=en-US)
 2. Safely set up a ladder under your garage door opener (unless you're tall enough to reach it, I suppose)
 3. Open the front of the unit where the lightbulb can be replaced. On mine this part of the case is on a hinge and simply flips up.
 4. Remove the light bulb
@@ -39,7 +39,7 @@ Garage Guardian is a cloud-based solution to monitor the state of your garage do
 4. Click on **Create Cloud Project** and follow these steps:
    - Name your project whatever you choose
    - Choose **Smart Home** as the industry and development method type type.
-   - Select the appropriate data center for your region. This should be the closest to your physical location where your garage door opener is installed. [Use this table to find the right data center for you](https://github.com/tuya/tuya-home-assistant/wiki/Countries-Regions-and-Tuya-Data-Center)
+   - Select the appropriate data center for your region. This should be the closest to your physical location where your garage door opener is installed. [Use this table to find the right data center for you](https://github.com/tuya/tuya-home-assistant/wiki/Countries-Regions-and-Tuya-Data-Center).
    - Click 'Create'
    - On the 'Authorize API Services' window, ensure you have 'IoT Core' and 'Authorization Token Management' in your selected API services. They may have been added by default.
    - Click 'Authorize'
@@ -54,7 +54,7 @@ Garage Guardian is a cloud-based solution to monitor the state of your garage do
 ### 3. Deploy the CloudFormation Stack
 **Imporant!** Close your garage door and wait for the light to turn off before completing this section. The Lambda function this deploys checks the bulb status once every minute and tracks opening and closing events based on if the bulb is currently online. The statusing code assumes the door starts in the closed and bulb off state.
 
-1. Click "Launch Stack" below. This will launch a CloudFormation stack with the Garage Guardian code after we configure a few details:
+1. Click the "Launch Stack" button. This will launch a [CloudFormation stack](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) with the Garage Guardian code after we configure a few details. Think of this like a recipe for deploying some code to the cloud! 
 [![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://garageguardian.s3.us-west-2.amazonaws.com/cloudformation.yml)
 2. Using the presented form, we'll now enter the information we collected in the previous section. These credentials will be held safely in the Secrets Manager this stack deploys. For your **TuyaAPIKey** enter the **Access ID** you copied in the previous section
 3. For your **TuyaAPISecret** enter the **Authorization Key** you copied in the previous section.
