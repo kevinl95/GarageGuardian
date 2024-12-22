@@ -67,6 +67,8 @@ Garage Guardian is a cloud-based solution to monitor the state of your garage do
 10. From the successfully deployed GarageGuardian stack, select the 'Output' tab.
 11. You will see two URLs. The first is an API you can use for your own integrations to check if your garage door is open. The second is a link to a status page you can bookmark on your phone or computer. Click this link. You should see your garage door status display momentarily!
 
+![A webpage with a banner that reads 'Garage Guardian' with text below that says 'Garage Door Status - The garage door is open.](assets/screenshot.png)
+
 
 # Architecture
 ```mermaid
