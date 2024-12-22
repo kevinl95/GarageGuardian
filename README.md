@@ -45,14 +45,14 @@ Garage Guardian is a cloud-based solution to monitor the state of your garage do
    - Click 'Authorize'
 5. From the 'Overview' section you can copy and save your 'Access ID' and 'Authorization Key'. They will be needed in later steps.
 6. From the top navigation bar select 'Devices'
-7. From this new page, in the new navigation bar that appeared below the top navigation bar select 'Link Tuya App Account'
+7. From this new page, in the new navigation bar that appeared below the top navigation bar select 'Link App Account'
 8. Click the 'Add App Account' button
-9. Keep the default selections of 'Automatic Link' and read permissions selected
+9. Keep the default selection of 'Automatic Link' selected
 10. In the Tuya Smart app, click the add button again (+) and click 'Scan'. Scan the QR code the Tuya IoT Platform is displaying. Your account will be linked automatically. If it complains about the data center you selected, repeat these steps with a different data center that may be closer to your present location.
 11. You should see a list of devices that includes your new smart lightbulb. Copy its **Device ID**. You will need it in the next section.
 
 ### 3. Deploy the CloudFormation Stack
-**Imporant!** Close your garage door and wait for the light to turn off before completing this section. The Lambda function this deploys checks the bulb status once every minute and tracks opening and closing events based on if the bulb is currently online. The statusing code assumes the door starts in the closed and bulb off state.
+**Important!** Close your garage door and wait for the light to turn off before completing this section. The Lambda function this deploys checks the bulb status once every minute and tracks opening and closing events based on if the bulb is currently online. The statusing code assumes the door starts in the closed and bulb off state.
 
 1. Click the "Launch Stack" button. This will launch a [CloudFormation stack](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) with the Garage Guardian code after we configure a few details. Think of this like a recipe for deploying some code to the cloud! 
 [![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://garageguardian.s3.us-west-2.amazonaws.com/cloudformation.yml)
@@ -64,7 +64,7 @@ Garage Guardian is a cloud-based solution to monitor the state of your garage do
 7. Click "Create Stack"
 8. You may be brought to another page with other options this project does not use. Simply click `Submit'.
 9. You will be brought to the CloudFormation dashboard. You will see that CloudFormation is deploying GarageGuardian. Wait several minutes while this occurs. You may need to refresh to see that the deployment has succeeded.
-10. From the successfully deployed GarageGuardian stack, select the 'Output' tab.
+10. From the successfully deployed GarageGuardian stack, select the 'Outputs' tab.
 11. You will see two URLs. The first is an API you can use for your own integrations to check if your garage door is open. The second is a link to a status page you can bookmark on your phone or computer. Click this link. You should see your garage door status display momentarily!
 
 ![A webpage with a banner that reads 'Garage Guardian' with text below that says 'Garage Door Status - The garage door is open.](assets/screenshot.png)
