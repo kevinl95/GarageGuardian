@@ -335,126 +335,80 @@ Resources:
               region = boto3.session.Session().region_name
               api_gateway_url = os.environ['API_GATEWAY']
 
-              html_content = f"""
+              html_content = """
               <!DOCTYPE html>
               <html lang="en">
               <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>Garage Guardian</title>
-                  <style>
-                      body {
-                          font-family: Arial, sans-serif;
-                          text-align: center;
-                          margin: 0;
-                          padding: 0;
-                          background-color: #f4f4f4;
-                      }
-                      header {
-                          background: #333;
-                          color: white;
-                          padding: 20px 0;
-                      }
-                      .status {
-                          margin-top: 50px;
-                          padding: 20px;
-                          background: white;
-                          border-radius: 10px;
-                          box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                          display: inline-block;
-                      }
-                      .status h2 {
-                          margin: 0;
-                          font-size: 24px;
-                          color: #333;
-                      }
-                      .status p {
-                          font-size: 18px;
-                          color: #666;
-                      }
-                      .status.open {
-                          color: green;
-                      }
-                      .status.closed {
-                          color: red;
-                      }
-                  </style>
-                  <link rel="manifest" href="data:application/manifest+json,${encodeURIComponent(JSON.stringify({
-                      name: "Garage Guardian",
-                      short_name: "GarageGuardian",
-                      description: "Check if your garage door is open from anywhere using a smart lightbulb!",
-                      start_url: "/",
-                      display: "standalone",
-                      background_color: "#ffffff",
-                      theme_color: "#333333",
-                      icons: [
-                          {
-                              src: "https://raw.githubusercontent.com/kevinl95/GarageGuardian/refs/heads/master/assets/pwa-192x192.png",
-                              sizes: "192x192",
-                              type: "image/png"
-                          },
-                          {
-                              src: "https://raw.githubusercontent.com/kevinl95/GarageGuardian/refs/heads/master/assets/pwa-512x512.png",
-                              sizes: "512x512",
-                              type: "image/png"
-                          }
-                      ]
-                  }))}">
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Garage Guardian</title>
+                <link rel="icon" href="/favicon.ico" type="image/x-icon">
+                <style>
+                  body {
+                    font-family: Arial, sans-serif;
+                    text-align: center;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f4;
+                  }
+                  header {
+                    background: #333;
+                    color: white;
+                    padding: 20px 0;
+                  }
+                  .status {
+                    margin-top: 50px;
+                    padding: 20px;
+                    background: white;
+                    border-radius: 10px;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                    display: inline-block;
+                  }
+                  .status h2 {
+                    margin: 0;
+                    font-size: 24px;
+                    color: #333;
+                  }
+                  .status p {
+                    font-size: 18px;
+                    color: #666;
+                  }
+                  .status.open {
+                    color: green;
+                  }
+                  .status.closed {
+                    color: red;
+                  }
+                </style>
               </head>
               <body>
-                  <header>
-                      <h1>Garage Guardian</h1>
-                  </header>
-                  <div class="status" id="garage-status">
-                      <h2>Garage Door Status</h2>
-                      <p id="status-text">Checking status...</p>
-                  </div>
-                  <script>
-                      async function checkGarageStatus() {
-                          const response = await fetch('<API_GATEWAY_STATUS_URL>');
-                          const data = await response.json();
-                          const statusText = document.getElementById('status-text');
-                          const statusDiv = document.getElementById('garage-status');
+                <header>
+                  <h1>Garage Guardian</h1>
+                </header>
+                <div class="status" id="garage-status">
+                  <h2>Garage Door Status</h2>
+                  <p id="status-text">Checking status...</p>
+                </div>
+                <script>
+                  async function checkGarageStatus() {
+                    const response = await fetch('<API_GATEWAY_STATUS_URL>');
+                    const data = await response.json();
+                    const statusText = document.getElementById('status-text');
+                    const statusDiv = document.getElementById('garage-status');
 
-                          if (data.status === "open") {
-                              statusText.textContent = "The garage door is open.";
-                              statusDiv.classList.remove('closed');
-                              statusDiv.classList.add('open');
-                          } else {
-                              statusText.textContent = "The garage door is closed.";
-                              statusDiv.classList.remove('open');
-                              statusDiv.classList.add('closed');
-                          }
-                      }
-                      checkGarageStatus();
-                      setInterval(checkGarageStatus, 5000);
-
-                      if ('serviceWorker' in navigator) {
-                          window.addEventListener('load', () => {
-                              const swBlob = new Blob([`
-                                  self.addEventListener('install', (event) => {
-                                      console.log('Service worker installed');
-                                  });
-
-                                  self.addEventListener('fetch', (event) => {
-                                      event.respondWith(
-                                          caches.match(event.request).then((response) => {
-                                              return response || fetch(event.request);
-                                          })
-                                      );
-                                  });
-                              `], { type: 'application/javascript' });
-
-                              const swUrl = URL.createObjectURL(swBlob);
-
-                              navigator.serviceWorker.register(swUrl).then((registration) => {
-                                  console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                              }, (error) => {
-                                  console.log('ServiceWorker registration failed: ', error);
-                              });
-                          });
-                      }
-                  </script>
+                    if (data.status === "open") {
+                      statusText.textContent = "The garage door is open.";
+                      statusDiv.classList.remove('closed');
+                      statusDiv.classList.add('open');
+                    } else {
+                      statusText.textContent = "The garage door is closed.";
+                      statusDiv.classList.remove('open');
+                      statusDiv.classList.add('closed');
+                    }
+                  }
+                  checkGarageStatus();
+                  setInterval(checkGarageStatus, 5000);
+                </script>
               </body>
               </html>
               """
