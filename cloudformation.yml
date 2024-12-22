@@ -324,7 +324,7 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          API_GATEWAY: !Sub "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/status
+          API_GATEWAY: !Sub "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/status"
       Code:
         ZipFile: |
           import json
@@ -333,7 +333,7 @@ Resources:
 
           def lambda_handler(event, context):
               region = boto3.session.Session().region_name
-              api_gateway_url = f"{os.environ['API_GATEWAY']}"
+              api_gateway_url = os.environ['API_GATEWAY']
 
               html_content = f"""
               <!DOCTYPE html>
@@ -458,6 +458,7 @@ Resources:
               </body>
               </html>
               """
+              html_content = html_content.replace('<API_GATEWAY_STATUS_URL>', api_gateway_url)
               return {
                   'statusCode': 200,
                   'headers': {'Content-Type': 'text/html'},
