@@ -278,7 +278,7 @@ Resources:
               current_state = table.get_item(Key={'DeviceID': device_id}).get('Item', {}).get('LastKnownState', 'closed')
 
               # Update the state based on the bulb status
-              if status == 'online':
+              if is_online:
                   new_state = 'open' if current_state == 'closed' else 'closed'
               else:
                   new_state = current_state  # No state change when bulb is offline
@@ -288,7 +288,7 @@ Resources:
                   Item={
                       'DeviceID': device_id,
                       'LastKnownState': new_state,
-                      'LastUpdated': datetime.utcnow().isoformat()
+                      'LastUpdated': datetime.datetime.utcnow().isoformat()
                   }
               )
 
@@ -324,7 +324,7 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          API_GATEWAY_ID: !GetAtt GarageGuardianApiGateway.RootResourceId
+          API_GATEWAY: !Sub "https://${GarageGuardianApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/status
       Code:
         ZipFile: |
           import json
@@ -333,7 +333,7 @@ Resources:
 
           def lambda_handler(event, context):
               region = boto3.session.Session().region_name
-              api_gateway_url = f"https://{os.environ['API_GATEWAY_ID']}.execute-api.{region}.amazonaws.com/prod/status"
+              api_gateway_url = f"{os.environ['API_GATEWAY']}"
 
               html_content = f"""
               <!DOCTYPE html>
@@ -343,63 +343,63 @@ Resources:
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
                   <title>Garage Guardian</title>
                   <style>
-                      body {{
+                      body {
                           font-family: Arial, sans-serif;
                           text-align: center;
                           margin: 0;
                           padding: 0;
                           background-color: #f4f4f4;
-                      }}
-                      header {{
+                      }
+                      header {
                           background: #333;
                           color: white;
                           padding: 20px 0;
-                      }}
-                      .status {{
+                      }
+                      .status {
                           margin-top: 50px;
                           padding: 20px;
                           background: white;
                           border-radius: 10px;
                           box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
                           display: inline-block;
-                      }}
-                      .status h2 {{
+                      }
+                      .status h2 {
                           margin: 0;
                           font-size: 24px;
                           color: #333;
-                      }}
-                      .status p {{
+                      }
+                      .status p {
                           font-size: 18px;
                           color: #666;
-                      }}
-                      .status.open {{
+                      }
+                      .status.open {
                           color: green;
-                      }}
-                      .status.closed {{
+                      }
+                      .status.closed {
                           color: red;
-                      }}
+                      }
                   </style>
-                  <link rel="manifest" href="data:application/manifest+json,{json.dumps({
-                      "name": "Garage Guardian",
-                      "short_name": "GarageGuardian",
-                      "description": "Check if your garage door is open from anywhere using a smart lightbulb!",
-                      "start_url": "/",
-                      "display": "standalone",
-                      "background_color": "#ffffff",
-                      "theme_color": "#333333",
-                      "icons": [
+                  <link rel="manifest" href="data:application/manifest+json,${encodeURIComponent(JSON.stringify({
+                      name: "Garage Guardian",
+                      short_name: "GarageGuardian",
+                      description: "Check if your garage door is open from anywhere using a smart lightbulb!",
+                      start_url: "/",
+                      display: "standalone",
+                      background_color: "#ffffff",
+                      theme_color: "#333333",
+                      icons: [
                           {
-                              "src": "pwa-192x192.png",
-                              "sizes": "192x192",
-                              "type": "image/png"
+                              src: "https://raw.githubusercontent.com/kevinl95/GarageGuardian/refs/heads/master/assets/pwa-192x192.png",
+                              sizes: "192x192",
+                              type: "image/png"
                           },
                           {
-                              "src": "pwa-512x512.png",
-                              "sizes": "512x512",
-                              "type": "image/png"
+                              src: "https://raw.githubusercontent.com/kevinl95/GarageGuardian/refs/heads/master/assets/pwa-512x512.png",
+                              sizes: "512x512",
+                              type: "image/png"
                           }
                       ]
-                  })}">
+                  }))}">
               </head>
               <body>
                   <header>
@@ -410,46 +410,50 @@ Resources:
                       <p id="status-text">Checking status...</p>
                   </div>
                   <script>
-                      async function checkGarageStatus() {{
-                          const response = await fetch('{api_gateway_url}');
+                      async function checkGarageStatus() {
+                          const response = await fetch('<API_GATEWAY_STATUS_URL>');
                           const data = await response.json();
                           const statusText = document.getElementById('status-text');
                           const statusDiv = document.getElementById('garage-status');
 
-                          if (data.status === "open") {{
+                          if (data.status === "open") {
                               statusText.textContent = "The garage door is open.";
                               statusDiv.classList.remove('closed');
                               statusDiv.classList.add('open');
-                          }} else {{
+                          } else {
                               statusText.textContent = "The garage door is closed.";
                               statusDiv.classList.remove('open');
                               statusDiv.classList.add('closed');
-                          }}
-                      }}
+                          }
+                      }
                       checkGarageStatus();
                       setInterval(checkGarageStatus, 5000);
 
-                      if ('serviceWorker' in navigator) {{
-                          window.addEventListener('load', () => {{
-                              navigator.serviceWorker.register(`data:application/javascript,${{encodeURIComponent(`
-                                  self.addEventListener('install', (event) => {{
+                      if ('serviceWorker' in navigator) {
+                          window.addEventListener('load', () => {
+                              const swBlob = new Blob([`
+                                  self.addEventListener('install', (event) => {
                                       console.log('Service worker installed');
-                                  }});
+                                  });
 
-                                  self.addEventListener('fetch', (event) => {{
+                                  self.addEventListener('fetch', (event) => {
                                       event.respondWith(
-                                          caches.match(event.request).then((response) => {{
+                                          caches.match(event.request).then((response) => {
                                               return response || fetch(event.request);
-                                          }})
+                                          })
                                       );
-                                  }});
-                              `)}}`).then((registration) => {{
+                                  });
+                              `], { type: 'application/javascript' });
+
+                              const swUrl = URL.createObjectURL(swBlob);
+
+                              navigator.serviceWorker.register(swUrl).then((registration) => {
                                   console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                              }}, (error) => {{
+                              }, (error) => {
                                   console.log('ServiceWorker registration failed: ', error);
-                              }});
-                          }});
-                      }}
+                              });
+                          });
+                      }
                   </script>
               </body>
               </html>
@@ -485,7 +489,7 @@ Resources:
       FunctionName: !Ref GarageGuardianHTMLLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GarageGuardianApiGateway}/*/GET/"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GarageGuardianApiGateway}/*/GET/html"
 
 Outputs:
   ApiGatewayUrl:

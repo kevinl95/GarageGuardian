@@ -78,7 +78,7 @@
             const statusText = document.getElementById('status-text');
             const statusDiv = document.getElementById('garage-status');
 
-            if (data.status === "on") {
+            if (data.status === "open") {
                 statusText.textContent = "The garage door is open.";
                 statusDiv.classList.remove('closed');
                 statusDiv.classList.add('open');
@@ -93,7 +93,7 @@
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register(`data:application/javascript,${encodeURIComponent(`
+                const swBlob = new Blob([`
                     self.addEventListener('install', (event) => {
                         console.log('Service worker installed');
                     });
@@ -105,7 +105,11 @@
                             })
                         );
                     });
-                `)}`).then((registration) => {
+                `], { type: 'application/javascript' });
+
+                const swUrl = URL.createObjectURL(swBlob);
+
+                navigator.serviceWorker.register(swUrl).then((registration) => {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
                 }, (error) => {
                     console.log('ServiceWorker registration failed: ', error);
