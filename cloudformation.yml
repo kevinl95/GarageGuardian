@@ -301,7 +301,7 @@ Resources:
   GarageGuardianEventBridgeRule:
     Type: AWS::Events::Rule
     Properties:
-      ScheduleExpression: rate(1 minutes)
+      ScheduleExpression: rate(1 minute)
       Targets:
         - Arn: !GetAtt GarageGuardianLambda.Arn
           Id: GarageGuardianLambdaTarget
